@@ -1,0 +1,67 @@
+{
+  "name": "print3d-calculator",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "^18",
+    "react-dom": "^18"
+  }
+}
+
+# 🖨️ Print3D Calculator
+
+מחשבון עלויות הדפסה תלת מימד עם ניתוח תמונות AI.
+
+## מבנה הפרויקט
+
+```
+print3d/
+├── api/
+│   └── analyze.js       ← Backend: מקבל תמונה, שולח ל-Claude, מחזיר נתונים
+├── public/
+│   └── index.html       ← Frontend: כל האפליקציה
+├── vercel.json          ← הגדרות Vercel
+└── package.json
+```
+
+## העלאה ל-Vercel (5 דקות)
+
+### צעד 1 — GitHub
+1. היכנס ל-github.com וצור repository חדש בשם `print3d-calculator`
+2. העלה את כל הקבצים (api/, public/, vercel.json, package.json)
+
+### צעד 2 — Vercel
+1. היכנס ל-vercel.com
+2. לחץ "Add New Project"
+3. בחר את ה-repository מ-GitHub
+4. לחץ "Deploy"
+
+### צעד 3 — API Key (חשוב!)
+1. ב-Vercel לך ל: Settings → Environment Variables
+2. הוסף:
+   - Name: `ANTHROPIC_API_KEY`
+   - Value: המפתח שלך מ-console.anthropic.com
+3. לחץ Save ואז Redeploy
+
+## קבלת API Key
+1. היכנס ל-console.anthropic.com
+2. לך ל-API Keys
+3. לחץ "Create Key"
+4. העתק את המפתח (מתחיל ב-sk-ant-...)
+
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/*.js", "use": "@vercel/node" },
+    { "src": "public/index.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/public/index.html" }
+  ]
+}
