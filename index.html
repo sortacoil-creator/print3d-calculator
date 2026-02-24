@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מחשבון עלויות הדפסה תלת מימד</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0d0d0d; --surface:#161616; --surface2:#1e1e1e;
+  --border:#2a2a2a; --accent:#ff6b2b; --accent2:#ffb347;
+  --green:#4ade80; --blue:#60a5fa; --red:#f87171;
+  --text:#f0f0f0; --muted:#888; --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Heebo',sans-serif;min-height:100vh;padding:24px 16px}
+
+/* HEADER */
+.header{text-align:center;margin-bottom:32px;position:relative}
+.header::before{content:'';position:absolute;top:-24px;left:50%;transform:translateX(-50%);width:300px;height:300px;background:radial-gradient(circle,rgba(255,107,43,0.12) 0%,transparent 70%);pointer-events:none}
+.header h1{font-size:clamp(24px,4vw,44px);font-weight:900;letter-spacing:-1px;background:linear-gradient(135deg,#ff6b2b,#ffb347);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1}
+.header p{color:var(--muted);margin-top:6px;font-size:14px}
+
+/* TABS */
+.tabs{display:flex;gap:8px;background:var(--surface);padding:6px;border-radius:var(--radius);border:1px solid var(--border);max-width:600px;margin:0 auto 28px}
+.tab{flex:1;padding:10px;border:none;border-radius:8px;background:transparent;color:var(--muted);font-family:'Heebo',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s}
+.tab.active{background:var(--accent);color:white;font-weight:700}
+.panel{display:none}.panel.active{display:block}
+
+/* UPLOAD */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface2);max-width:900px;margin:0 auto 16px}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(255,107,43,0.05)}
+.upload-zone input{display:none}
+.upload-icon{font-size:32px;margin-bottom:6px}
+.upload-zone p{color:var(--muted);font-size:13px}
+.upload-zone strong{color:var(--accent)}
+#preview-img{max-width:100%;max-height:180px;border-radius:8px;margin-top:12px;display:none;border:1px solid var(--border)}
+
+/* STATUS */
+.ocr-status{max-width:900px;margin:0 auto 14px;padding:12px 16px;border-radius:var(--radius);font-size:13px;display:none;align-items:center;gap:10px}
+.ocr-status.loading{display:flex;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);color:var(--blue)}
+.ocr-status.success{display:flex;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.25);color:var(--green)}
+.ocr-status.error{display:flex;background:rgba(255,107,43,0.08);border:1px solid rgba(255,107,43,0.25);color:var(--accent)}
+.spinner{width:16px;height:16px;border:2px solid rgba(96,165,250,0.3);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* EXTRACTED */
+.extracted{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:900px;margin:0 auto 16px}
+.extracted-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;position:relative;overflow:hidden;transition:all 0.3s}
+.extracted-item::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transform:scaleX(0);transition:transform 0.4s}
+.extracted-item.filled{border-color:rgba(255,107,43,0.3)}.extracted-item.filled::after{transform:scaleX(1)}
+.ei-label{font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+.ei-value{font-family:'Space Mono',monospace;font-size:20px;font-weight:700;color:var(--text)}
+.ei-unit{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px;margin:0 auto 16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;max-width:900px;margin:0 auto 16px}
+@media(max-width:640px){.grid-2,.grid-3{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.card h3{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
+
+/* INPUTS */
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.field-row{display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:border-color 0.2s}
+.field-row:focus-within{border-color:var(--accent)}
+.field-row input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Space Mono',monospace;font-size:14px;padding:9px 12px;outline:none;min-width:0}
+.field-row .unit{padding:9px 10px;font-size:10px;color:var(--muted);background:rgba(255,255,255,0.03);border-right:1px solid var(--border);white-space:nowrap;font-family:'Space Mono',monospace}
+
+/* TOGGLE OPTIONS */
+.toggle-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.toggle-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Heebo',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;font-weight:500}
+.toggle-btn.active{border-color:var(--accent);background:rgba(255,107,43,0.12);color:var(--accent);font-weight:700}
+.toggle-btn.urgent.active{border-color:#f59e0b;background:rgba(245,158,11,0.12);color:#f59e0b}
+
+/* SECTION DIVIDER */
+.section-label{max-width:900px;margin:0 auto 10px;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;padding-right:4px}
+
+/* CALC BUTTON */
+.calc-btn{display:block;width:100%;max-width:900px;margin:0 auto 24px;padding:15px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:var(--radius);color:white;font-family:'Heebo',sans-serif;font-size:17px;font-weight:900;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 24px rgba(255,107,43,0.3)}
+.calc-btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(255,107,43,0.4)}
+
+/* RESULTS */
+.results{max-width:900px;margin:0 auto;display:none}
+.results.visible{display:block}
+.results-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+@media(max-width:500px){.results-grid{grid-template-columns:1fr}}
+.result-card{border-radius:var(--radius);padding:22px}
+.result-card.mine{background:linear-gradient(135deg,#1a1a1a,#222);border:1px solid #333}
+.result-card.client{background:linear-gradient(135deg,rgba(255,107,43,0.15),rgba(255,179,71,0.1));border:1px solid rgba(255,107,43,0.3)}
+.rc-label{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px}
+.rc-amount{font-family:'Space Mono',monospace;font-size:clamp(28px,4vw,42px);font-weight:700;line-height:1}
+.result-card.mine .rc-amount{color:var(--text)}.result-card.client .rc-amount{color:var(--accent)}
+.rc-sub{font-size:12px;color:var(--muted);margin-top:6px}
+
+.breakdown{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.breakdown h3{font-size:11px;color:var(--accent);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
+.breakdown-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
+.breakdown-row:last-child{border-bottom:none}
+.breakdown-row .br-label{color:var(--muted)}.breakdown-row .br-value{font-family:'Space Mono',monospace;color:var(--text)}
+.breakdown-row.total{margin-top:6px;padding-top:14px;border-top:2px solid var(--accent);border-bottom:none;font-weight:700}
+.breakdown-row.total .br-label{color:var(--text)}.breakdown-row.total .br-value{color:var(--accent);font-size:15px}
+.bar-item{margin-bottom:8px}
+.bar-item-label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
+.bar-track{height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width 0.6s cubic-bezier(0.4,0,0.2,1)}
+
+/* QUOTE ACTIONS */
+.quote-actions{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+.action-btn{flex:1;min-width:180px;padding:14px;border:none;border-radius:var(--radius);font-family:'Heebo',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.action-btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;box-shadow:0 4px 16px rgba(255,107,43,0.3)}
+.action-btn.primary:hover{transform:translateY(-2px)}
+.action-btn.secondary{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+.action-btn.secondary:hover{border-color:var(--accent);color:var(--accent)}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.animate-in{animation:fadeUp 0.4s ease forwards}
+
+/* ===================== QUOTE SCREEN ===================== */
+#quote-screen{
+  position:fixed;inset:0;z-index:1000;
+  background:#f7f6f2;
+  overflow-y:auto;
+  display:none;
+  font-family:'Heebo',sans-serif;
+  direction:rtl;
+}
+#quote-screen.open{display:block}
+.qs-wrap{max-width:700px;margin:0 auto;padding:40px 24px 60px}
+
+/* Quote header */
+.qs-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px}
+.qs-logo{font-size:22px;font-weight:900;color:#1a1a1a;letter-spacing:-0.5px}
+.qs-logo span{color:var(--accent)}
+.qs-meta{text-align:left;font-size:12px;color:#888;line-height:1.7}
+.qs-close{position:fixed;top:20px;left:20px;width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #e0e0e0;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:all 0.2s;z-index:10}
+.qs-close:hover{background:var(--accent);color:white;border-color:var(--accent)}
+
+.qs-title{font-size:28px;font-weight:900;color:#1a1a1a;margin-bottom:4px;letter-spacing:-0.5px}
+.qs-subtitle{font-size:14px;color:#888;margin-bottom:32px}
+
+/* Client name */
+.qs-to{background:white;border-radius:12px;padding:20px 24px;margin-bottom:24px;border:1px solid #e8e8e8}
+.qs-to-label{font-size:11px;color:#aaa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+.qs-to-name{font-size:20px;font-weight:700;color:#1a1a1a}
+
+/* Items table */
+.qs-table{background:white;border-radius:12px;overflow:hidden;border:1px solid #e8e8e8;margin-bottom:20px}
+.qs-table-head{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;background:#f0f0ee;padding:10px 20px;font-size:11px;color:#999;letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.qs-table-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;padding:14px 20px;border-top:1px solid #f0f0f0;align-items:center}
+.qs-table-row:first-child{border-top:none}
+.qs-item-name{font-size:14px;font-weight:600;color:#1a1a1a}
+.qs-item-sub{font-size:11px;color:#aaa;margin-top:2px}
+.qs-cell{font-size:13px;color:#555;font-family:'Space Mono',monospace}
+.qs-cell.bold{font-weight:700;color:#1a1a1a}
+
+/* Addons */
+.qs-addons{background:white;border-radius:12px;border:1px solid #e8e8e8;margin-bottom:20px;overflow:hidden}
+.qs-addon-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid #f0f0f0;font-size:13px}
+.qs-addon-row:first-child{border-top:none}
+.qs-addon-label{color:#555;display:flex;align-items:center;gap:8px}
+.qs-addon-icon{font-size:16px}
+.qs-addon-value{font-family:'Space Mono',monospace;font-weight:700;color:#1a1a1a}
+.qs-addon-value.highlight{color:var(--accent)}
+
+/* Badge */
+.qs-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.5px}
+.qs-badge.urgent{background:#fff7ed;color:#ea580c;border:1px solid #fed7aa}
+.qs-badge.standard{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+
+/* Total */
+.qs-total{background:linear-gradient(135deg,#1a1a1a,#2a2a2a);border-radius:12px;padding:24px;margin-bottom:24px;color:white}
+.qs-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;color:rgba(255,255,255,0.6)}
+.qs-total-row:last-child{margin-bottom:0}
+.qs-total-final{display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);margin-top:8px}
+.qs-total-final .label{font-size:14px;font-weight:700;color:white}
+.qs-total-final .amount{font-family:'Space Mono',monospace;font-size:32px;font-weight:700;color:var(--accent2)}
+
+/* Footer note */
+.qs-note{background:#fffbf5;border:1px solid #fed7aa;border-radius:10px;padding:16px 20px;font-size:12px;color:#92400e;line-height:1.6;margin-bottom:24px}
+
+/* PDF button */
+.qs-actions{display:flex;gap:12px;flex-wrap:wrap}
+.qs-btn{flex:1;min-width:150px;padding:14px;border-radius:10px;border:none;font-family:'Heebo',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.qs-btn.pdf{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;box-shadow:0 4px 16px rgba(255,107,43,0.3)}
+.qs-btn.pdf:hover{transform:translateY(-2px)}
+.qs-btn.back{background:white;border:1px solid #e0e0e0;color:#555}
+.qs-btn.back:hover{border-color:#aaa}
+
+/* ARCH */
+.arch-container{max-width:900px;margin:0 auto}
+.arch-title{text-align:center;font-size:12px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
+.arch-layer{margin-bottom:10px}
+.arch-layer-label{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+.arch-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.arch-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;text-align:center;min-width:120px;transition:all 0.2s;cursor:default}
+.arch-box:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 20px rgba(255,107,43,0.15)}
+.arch-box .ab-icon{font-size:22px;margin-bottom:4px}
+.arch-box .ab-name{font-size:12px;font-weight:700;color:var(--text)}
+.arch-box .ab-tech{font-size:10px;color:var(--muted);margin-top:2px;font-family:'Space Mono',monospace}
+.arch-box.highlight{border-color:rgba(255,107,43,0.5);background:rgba(255,107,43,0.07)}
+.arch-arrow{text-align:center;color:var(--accent);font-size:18px;margin:2px 0;opacity:0.6}
+.flow-note{background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:var(--radius);padding:14px 18px;margin-top:20px;font-size:12px;color:var(--muted);line-height:1.7}
+.flow-note strong{color:var(--blue)}
+.tech-stack{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:20px}
+.tech-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.ti-icon{font-size:18px}.ti-name{font-size:12px;font-weight:700}.ti-desc{font-size:10px;color:var(--muted)}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:auto}
+.badge.green{background:rgba(74,222,128,0.15);color:var(--green)}
+.badge.orange{background:rgba(255,107,43,0.15);color:var(--accent)}
+.badge.blue{background:rgba(96,165,250,0.15);color:var(--blue)}
+</style>
+</head>
+<body>
+
+<!-- ========== QUOTE SCREEN ========== -->
+<div id="quote-screen">
+  <button class="qs-close" onclick="closeQuote()" title="סגור">✕</button>
+  <div class="qs-wrap" id="qs-content">
+    <div class="qs-header">
+      <div>
+        <div class="qs-logo">Print<span>3D</span> Studio</div>
+        <div style="font-size:12px;color:#aaa;margin-top:4px" id="qs-date"></div>
+      </div>
+      <div class="qs-meta">
+        <div id="qs-quote-num"></div>
+        <div id="qs-valid">בתוקף ל-7 ימים</div>
+      </div>
+    </div>
+
+    <div class="qs-title">הצעת מחיר</div>
+    <div class="qs-subtitle" id="qs-subtitle">הדפסת תלת מימד</div>
+
+    <div class="qs-to">
+      <div class="qs-to-label">הצעה עבור</div>
+      <div class="qs-to-name" id="qs-client-name">לקוח יקר</div>
+    </div>
+
+    <div class="qs-table">
+      <div class="qs-table-head">
+        <div>פריט</div>
+        <div>כמות</div>
+        <div>מחיר יחידה</div>
+        <div>סה"כ</div>
+      </div>
+      <div class="qs-table-row" id="qs-main-row">
+        <div>
+          <div class="qs-item-name" id="qs-item-name">הדפסה תלת מימד</div>
+          <div class="qs-item-sub" id="qs-item-sub"></div>
+        </div>
+        <div class="qs-cell" id="qs-qty">1</div>
+        <div class="qs-cell" id="qs-unit-price">—</div>
+        <div class="qs-cell bold" id="qs-line-total">—</div>
+      </div>
+    </div>
+
+    <div class="qs-addons" id="qs-addons-block">
+      <!-- filled dynamically -->
+    </div>
+
+    <div class="qs-total">
+      <div class="qs-total-row"><span>עלות הדפסה</span><span id="qst-base">—</span></div>
+      <div class="qs-total-row" id="qst-urgent-row" style="display:none"><span>🚀 תוספת דחיפות</span><span id="qst-urgent">—</span></div>
+      <div class="qs-total-row" id="qst-ship-row" style="display:none"><span>📦 משלוח</span><span id="qst-ship">—</span></div>
+      <div class="qs-total-final">
+        <span class="label">סה"כ לתשלום</span>
+        <span class="amount" id="qst-final">—</span>
+      </div>
+    </div>
+
+    <div class="qs-note" id="qs-note">
+      ⏱️ <strong>זמן אספקה משוער:</strong> <span id="qs-delivery"></span><br>
+      💬 מחיר זה כולל הדפסה, בדיקת איכות ואריזה בסיסית. אנא צרו קשר לכל שאלה.
+    </div>
+
+    <div class="qs-actions">
+      <button class="qs-btn pdf" onclick="downloadPDF()">📄 הורד PDF</button>
+      <button class="qs-btn back" onclick="closeQuote()">← חזור למחשבון</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MAIN APP ========== -->
+<div class="header">
+  <h1>🖨️ מחשבון עלויות<br>הדפסה תלת מימד</h1>
+  <p>העלה תמונה מהסלייסר • AI קורא אוטומטית • צור הצעת מחיר</p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('calc',this)">🧮 מחשבון</button>
+  <button class="tab" onclick="switchTab('arch',this)">🏗️ ארכיטקטורה</button>
+</div>
+
+<div id="panel-calc" class="panel active">
+
+  <!-- Upload -->
+  <div class="upload-zone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+    <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files[0])">
+    <div class="upload-icon">📸</div>
+    <p><strong>לחץ או גרור תמונה מהסלייסר</strong></p>
+    <p style="margin-top:4px;font-size:11px">Cura, PrusaSlicer, Bambu Studio — ה-AI קורא אוטומטית ✨</p>
+    <img id="preview-img" alt="preview">
+  </div>
+
+  <div class="ocr-status" id="ocr-status">
+    <div class="spinner" id="ocr-spinner"></div>
+    <span id="ocr-msg"></span>
+  </div>
+
+  <div class="extracted">
+    <div class="extracted-item" id="ei-material"><div class="ei-label">⚖️ חומר</div><div class="ei-value" id="val-material">—</div><div class="ei-unit">גרם</div></div>
+    <div class="extracted-item" id="ei-hours"><div class="ei-label">🕐 שעות</div><div class="ei-value" id="val-hours">—</div><div class="ei-unit">שעות</div></div>
+    <div class="extracted-item" id="ei-minutes"><div class="ei-label">⏱️ דקות</div><div class="ei-value" id="val-minutes">—</div><div class="ei-unit">דקות</div></div>
+  </div>
+
+  <!-- Print Data -->
+  <div class="section-label">📊 נתוני הדפסה</div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>נתונים מהסלייסר</h3>
+      <div class="field">
+        <label>כמות חומר (גרם)</label>
+        <div class="field-row"><div class="unit">g</div><input type="number" id="inp-grams" placeholder="יתמלא מהתמונה..." min="0" step="0.1"></div>
+      </div>
+      <div class="field">
+        <label>זמן הדפסה — שעות</label>
+        <div class="field-row"><div class="unit">hr</div><input type="number" id="inp-hours" placeholder="יתמלא..." min="0"></div>
+      </div>
+      <div class="field">
+        <label>זמן הדפסה — דקות</label>
+        <div class="field-row"><div class="unit">min</div><input type="number" id="inp-mins" placeholder="יתמלא..." min="0" max="59"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>כמות וייצור</h3>
+      <div class="field">
+        <label>כמות יחידות בפלטה</label>
+        <div class="field-row"><div class="unit">יח'</div><input type="number" id="inp-per-plate" value="1" min="1" oninput="updatePerPlate()"></div>
+      </div>
+      <div class="field">
+        <label>כמות פלטות</label>
+        <div class="field-row"><div class="unit">פלטות</div><input type="number" id="inp-plates" value="1" min="1" oninput="updatePerPlate()"></div>
+      </div>
+      <div style="background:rgba(255,107,43,0.07);border:1px solid rgba(255,107,43,0.2);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--accent2)">
+        סה"כ יחידות: <strong id="total-units-display">1</strong>
+        <span style="color:var(--muted);font-size:11px;margin-right:8px">| מחיר ליחידה יחושב אוטומטית</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Costs -->
+  <div class="section-label">⚙️ הגדרות עלויות</div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>עלויות ייצור</h3>
+      <div class="field">
+        <label>מחיר חומר לקילו</label>
+        <div class="field-row"><div class="unit">₪/kg</div><input type="number" id="inp-mat-price" value="80" min="0" step="1"></div>
+      </div>
+      <div class="field">
+        <label>עלות שעת עבודה (חשמל + בלאי)</label>
+        <div class="field-row"><div class="unit">₪/hr</div><input type="number" id="inp-hourly" value="3.50" min="0" step="0.1"></div>
+      </div>
+      <div class="field">
+        <label>עלויות קבועות (אריזה, כלים...)</label>
+        <div class="field-row"><div class="unit">₪</div><input type="number" id="inp-fixed" value="5" min="0" step="0.5"></div>
+      </div>
+      <div class="field">
+        <label>אחוז רווח ללקוח</label>
+        <div class="field-row"><div class="unit">%</div><input type="number" id="inp-margin" value="30" min="0" max="500"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>אפשרויות נוספות</h3>
+      <div class="field">
+        <label>⚡ דחיפות</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" onclick="setUrgency('standard',this)">רגיל</button>
+          <button class="toggle-btn urgent" onclick="setUrgency('express',this)">אקספרס +25%</button>
+          <button class="toggle-btn urgent" onclick="setUrgency('urgent',this)">דחוף +50%</button>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>📦 משלוח</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" onclick="setShipping(0,this)">איסוף עצמי</button>
+          <button class="toggle-btn" onclick="setShipping(30,this)">משלוח רגיל ₪30</button>
+          <button class="toggle-btn" onclick="setShipping(60,this)">משלוח מהיר ₪60</button>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>שם הלקוח (להצעת מחיר)</label>
+        <div class="field-row"><div class="unit">👤</div><input type="text" id="inp-client-name" placeholder='למשל: "דוד כהן"' style="font-family:'Heebo',sans-serif"></div>
+      </div>
+      <div class="field">
+        <label>תיאור הפריט (אופציונלי)</label>
+        <div class="field-row"><div class="unit">📝</div><input type="text" id="inp-item-desc" placeholder='למשל: "מחזיק טלפון"' style="font-family:'Heebo',sans-serif"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="calc-btn" onclick="calculate()">⚡ חשב עלויות</button>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="results-grid">
+      <div class="result-card mine animate-in">
+        <div class="rc-label">💰 עלות עצמית</div>
+        <div class="rc-amount" id="res-cost">₪0.00</div>
+        <div class="rc-sub" id="res-cost-sub"></div>
+      </div>
+      <div class="result-card client animate-in">
+        <div class="rc-label">🏷️ מחיר ללקוח</div>
+        <div class="rc-amount" id="res-client">₪0.00</div>
+        <div class="rc-sub" id="res-client-sub"></div>
+      </div>
+    </div>
+
+    <div class="breakdown">
+      <h3>📋 פירוט עלויות</h3>
+      <div class="breakdown-row"><span class="br-label">חומר (<span id="br-grams-lbl">0g</span>)</span><span class="br-value" id="br-mat">₪0.00</span></div>
+      <div class="breakdown-row"><span class="br-label">זמן מכונה</span><span class="br-value" id="br-time">₪0.00</span></div>
+      <div class="breakdown-row"><span class="br-label">עלויות קבועות</span><span class="br-value" id="br-fixed">₪0.00</span></div>
+      <div class="breakdown-row"><span class="br-label">רווח</span><span class="br-value" id="br-profit">₪0.00</span></div>
+      <div class="breakdown-row" id="br-urgent-row" style="display:none"><span class="br-label">⚡ תוספת דחיפות</span><span class="br-value" id="br-urgent">₪0.00</span></div>
+      <div class="breakdown-row" id="br-ship-row" style="display:none"><span class="br-label">📦 משלוח</span><span class="br-value" id="br-ship">₪0.00</span></div>
+      <div class="breakdown-row" id="br-units-row"><span class="br-label">💡 מחיר ליחידה</span><span class="br-value" id="br-per-unit">₪0.00</span></div>
+      <div class="breakdown-row total"><span class="br-label">סה"כ ללקוח</span><span class="br-value" id="br-total">₪0.00</span></div>
+      <div id="bar-chart" style="margin-top:16px"></div>
+    </div>
+
+    <div class="quote-actions">
+      <button class="action-btn primary" onclick="openQuote()">📄 צור הצעת מחיר ללקוח</button>
+      <button class="action-btn secondary" onclick="resetForm()">🔄 חישוב חדש</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ARCH TAB -->
+<div id="panel-arch" class="panel">
+  <div class="arch-container">
+    <div class="arch-title">ארכיטקטורת המערכת</div>
+    <div class="arch-layer">
+      <div class="arch-layer-label">🖥️ Frontend</div>
+      <div class="arch-row">
+        <div class="arch-box highlight"><div class="ab-icon">📱</div><div class="ab-name">Web App</div><div class="ab-tech">React / Next.js</div></div>
+        <div class="arch-box highlight"><div class="ab-icon">📸</div><div class="ab-name">Upload תמונה</div><div class="ab-tech">Drag & Drop</div></div>
+        <div class="arch-box highlight"><div class="ab-icon">📄</div><div class="ab-name">הצעת מחיר</div><div class="ab-tech">PDF Generator</div></div>
+      </div>
+    </div>
+    <div class="arch-arrow">⬇️ HTTPS</div>
+    <div class="arch-layer">
+      <div class="arch-layer-label">⚙️ Backend</div>
+      <div class="arch-row">
+        <div class="arch-box"><div class="ab-icon">🚀</div><div class="ab-name">API Server</div><div class="ab-tech">Node / FastAPI</div></div>
+        <div class="arch-box highlight"><div class="ab-icon">🔍</div><div class="ab-name">OCR Engine</div><div class="ab-tech">Claude Vision</div></div>
+        <div class="arch-box"><div class="ab-icon">📐</div><div class="ab-name">Calculator</div><div class="ab-tech">Business Logic</div></div>
+        <div class="arch-box"><div class="ab-icon">🔐</div><div class="ab-name">Auth</div><div class="ab-tech">JWT</div></div>
+      </div>
+    </div>
+    <div class="arch-arrow">⬇️ Read / Write</div>
+    <div class="arch-layer">
+      <div class="arch-layer-label">🗄️ Data</div>
+      <div class="arch-row">
+        <div class="arch-box"><div class="ab-icon">🗃️</div><div class="ab-name">הגדרות</div><div class="ab-tech">PostgreSQL</div></div>
+        <div class="arch-box"><div class="ab-icon">📁</div><div class="ab-name">File Storage</div><div class="ab-tech">S3</div></div>
+        <div class="arch-box"><div class="ab-icon">📜</div><div class="ab-name">היסטוריה</div><div class="ab-tech">הזמנות</div></div>
+      </div>
+    </div>
+    <div class="arch-arrow">⬇️ External APIs</div>
+    <div class="arch-layer">
+      <div class="arch-layer-label">🌐 שירותים חיצוניים</div>
+      <div class="arch-row">
+        <div class="arch-box"><div class="ab-icon">🤖</div><div class="ab-name">Claude Vision</div><div class="ab-tech">Image Parsing</div></div>
+        <div class="arch-box"><div class="ab-icon">📧</div><div class="ab-name">Email</div><div class="ab-tech">Resend</div></div>
+        <div class="arch-box"><div class="ab-icon">💳</div><div class="ab-name">תשלומים</div><div class="ab-tech">PayPlus</div></div>
+      </div>
+    </div>
+    <div class="flow-note">
+      <strong>🔄 זרימה:</strong> תמונת סלייסר → <strong>Claude Vision</strong> מחלץ נתונים → חישוב עלויות → הצעת מחיר PDF ללקוח
+    </div>
+    <div style="margin-top:20px;margin-bottom:10px;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase">🛠️ Stack מומלץ</div>
+    <div class="tech-stack">
+      <div class="tech-item"><div class="ti-icon">⚡</div><div class="ti-info"><div class="ti-name">Next.js 14</div><div class="ti-desc">Frontend + API Routes</div></div><span class="badge green">מומלץ</span></div>
+      <div class="tech-item"><div class="ti-icon">🤖</div><div class="ti-info"><div class="ti-name">Claude Vision</div><div class="ti-desc">קריאת תמונות OCR</div></div><span class="badge orange">ליבה</span></div>
+      <div class="tech-item"><div class="ti-icon">🗃️</div><div class="ti-info"><div class="ti-name">Supabase</div><div class="ti-desc">DB + Auth + Storage</div></div><span class="badge green">מומלץ</span></div>
+      <div class="tech-item"><div class="ti-icon">☁️</div><div class="ti-info"><div class="ti-name">Vercel</div><div class="ti-desc">Hosting & Deploy</div></div><span class="badge blue">פשוט</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let imageBase64 = null, imageMime = 'image/jpeg';
+let urgencyRate = 0, shippingCost = 0;
+let lastCalc = {};
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// Drag & drop
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file) {
+  if (!file) return;
+  imageMime = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    imageBase64 = dataUrl.split(',')[1];
+    const img = document.getElementById('preview-img');
+    img.src = dataUrl; img.style.display = 'block';
+    runOCR();
+  };
+  reader.readAsDataURL(file);
+}
+
+function setStatus(type, msg) {
+  const el = document.getElementById('ocr-status');
+  el.className = 'ocr-status ' + type;
+  document.getElementById('ocr-spinner').style.display = type === 'loading' ? 'block' : 'none';
+  document.getElementById('ocr-msg').textContent = msg;
+}
+
+async function runOCR() {
+  setStatus('loading', '🤖 AI מנתח את תמונת הסלייסר...');
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
+          { type: 'text', text: `This is a 3D slicer screenshot. Extract ONLY these values, respond ONLY with valid JSON:
+{"grams": <number or null>, "hours": <number or null>, "minutes": <number or null>}
+Look for filament/material in grams, print time in hours and minutes. If time is total minutes only, convert (e.g. 90min → hours:1, minutes:30). Use null if not found.` }
+        ]}]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const parsed = JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
+    let found = 0;
+    if (parsed.grams != null) { document.getElementById('inp-grams').value = parsed.grams; document.getElementById('val-material').textContent = parsed.grams; document.getElementById('ei-material').classList.add('filled'); found++; }
+    if (parsed.hours != null) { document.getElementById('inp-hours').value = parsed.hours; document.getElementById('val-hours').textContent = parsed.hours; document.getElementById('ei-hours').classList.add('filled'); found++; }
+    if (parsed.minutes != null) { document.getElementById('inp-mins').value = parsed.minutes; document.getElementById('val-minutes').textContent = parsed.minutes; document.getElementById('ei-minutes').classList.add('filled'); found++; }
+    setStatus(found > 0 ? 'success' : 'error', found > 0 ? `✅ זוהו ${found} ערכים — בדוק ולחץ "חשב עלויות"` : '⚠️ לא זוהו ערכים — הזן ידנית');
+  } catch(e) {
+    setStatus('error', '❌ ' + (e.message || 'שגיאה') + ' — הזן ערכים ידנית');
+  }
+}
+
+function updatePerPlate() {
+  const perPlate = parseInt(document.getElementById('inp-per-plate').value) || 1;
+  const plates   = parseInt(document.getElementById('inp-plates').value)    || 1;
+  document.getElementById('total-units-display').textContent = perPlate * plates;
+}
+
+function setUrgency(type, btn) {
+  document.querySelectorAll('.toggle-btn.urgent, .toggle-btn.active').forEach(b => { if(b.closest('.field') === btn.closest('.field')) b.classList.remove('active'); });
+  btn.classList.add('active');
+  urgencyRate = type === 'express' ? 0.25 : type === 'urgent' ? 0.5 : 0;
+}
+
+function setShipping(cost, btn) {
+  document.querySelectorAll('.toggle-btn').forEach(b => { if(b.closest('.field') === btn.closest('.field')) b.classList.remove('active'); });
+  btn.classList.add('active');
+  shippingCost = cost;
+}
+
+function fmt(n) { return '₪' + n.toFixed(2); }
+
+function calculate() {
+  const grams    = parseFloat(document.getElementById('inp-grams').value) || 0;
+  const hours    = parseFloat(document.getElementById('inp-hours').value) || 0;
+  const mins     = parseFloat(document.getElementById('inp-mins').value)  || 0;
+  const matPrice = parseFloat(document.getElementById('inp-mat-price').value) || 0;
+  const hourly   = parseFloat(document.getElementById('inp-hourly').value)    || 0;
+  const fixed    = parseFloat(document.getElementById('inp-fixed').value)     || 0;
+  const margin   = parseFloat(document.getElementById('inp-margin').value)    || 0;
+  const perPlate = parseInt(document.getElementById('inp-per-plate').value)   || 1;
+  const plates   = parseInt(document.getElementById('inp-plates').value)      || 1;
+  const totalUnits = perPlate * plates;
+
+  const totalHours = hours + mins / 60;
+  const matCost    = grams * plates * (matPrice / 1000);
+  const timeCost   = totalHours * plates * hourly;
+  const baseCost   = matCost + timeCost + fixed;
+  const profit     = baseCost * (margin / 100);
+  const beforeAddons = baseCost + profit;
+  const urgencyAdd = beforeAddons * urgencyRate;
+  const clientTotal = beforeAddons + urgencyAdd + shippingCost;
+  const perUnit     = totalUnits > 0 ? clientTotal / totalUnits : clientTotal;
+
+  lastCalc = { grams, hours, mins, matCost, timeCost, fixed, profit, baseCost,
+    urgencyAdd, shippingCost, clientTotal, perUnit, totalUnits, plates, perPlate,
+    margin, urgencyRate, matPrice, hourly, totalHours };
+
+  document.getElementById('res-cost').textContent   = fmt(baseCost);
+  document.getElementById('res-client').textContent = fmt(clientTotal);
+  document.getElementById('res-cost-sub').textContent = `${totalUnits} יחידות • ${plates} פלטות`;
+  document.getElementById('res-client-sub').textContent = `${fmt(perUnit)} ליחידה • רווח ${fmt(profit)}`;
+  document.getElementById('br-grams-lbl').textContent = (grams * plates) + 'g';
+  document.getElementById('br-mat').textContent   = fmt(matCost);
+  document.getElementById('br-time').textContent  = fmt(timeCost);
+  document.getElementById('br-fixed').textContent = fmt(fixed);
+  document.getElementById('br-profit').textContent= fmt(profit);
+  document.getElementById('br-per-unit').textContent = fmt(perUnit);
+  document.getElementById('br-total').textContent = fmt(clientTotal);
+
+  const urgRow = document.getElementById('br-urgent-row');
+  const shipRow = document.getElementById('br-ship-row');
+  if (urgencyAdd > 0) { urgRow.style.display='flex'; document.getElementById('br-urgent').textContent = fmt(urgencyAdd); }
+  else { urgRow.style.display='none'; }
+  if (shippingCost > 0) { shipRow.style.display='flex'; document.getElementById('br-ship').textContent = fmt(shippingCost); }
+  else { shipRow.style.display='none'; }
+
+  // Bar chart
+  const items = [
+    { label:'חומר', value:matCost, color:'#ff6b2b' },
+    { label:'זמן מכונה', value:timeCost, color:'#ffb347' },
+    { label:'קבועות', value:fixed, color:'#60a5fa' },
+    { label:'רווח', value:profit, color:'#4ade80' },
+  ];
+  if (urgencyAdd > 0) items.push({ label:'דחיפות', value:urgencyAdd, color:'#f59e0b' });
+  if (shippingCost > 0) items.push({ label:'משלוח', value:shippingCost, color:'#a78bfa' });
+  const max = clientTotal || 1;
+  document.getElementById('bar-chart').innerHTML = items.map(i => `
+    <div class="bar-item">
+      <div class="bar-item-label"><span>${i.label}</span><span>${fmt(i.value)}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(i.value/max*100).toFixed(1)}%;background:${i.color}"></div></div>
+    </div>`).join('');
+
+  const r = document.getElementById('results');
+  r.classList.add('visible');
+  r.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function openQuote() {
+  const c = lastCalc;
+  if (!c.clientTotal) { alert('יש לחשב עלויות תחילה'); return; }
+
+  const clientName = document.getElementById('inp-client-name').value || 'לקוח יקר';
+  const itemDesc   = document.getElementById('inp-item-desc').value || 'הדפסת תלת מימד';
+  const quoteNum   = 'Q' + Date.now().toString().slice(-6);
+  const now        = new Date();
+  const dateStr    = now.toLocaleDateString('he-IL');
+
+  document.getElementById('qs-date').textContent = dateStr;
+  document.getElementById('qs-quote-num').textContent = 'מס\' הצעה: ' + quoteNum;
+  document.getElementById('qs-client-name').textContent = clientName;
+  document.getElementById('qs-subtitle').textContent = itemDesc;
+  document.getElementById('qs-item-name').textContent = itemDesc;
+
+  const hrs  = Math.floor(c.totalHours);
+  const mns  = Math.round((c.totalHours - hrs) * 60);
+  const timeTxt = hrs > 0 ? `${hrs}ש' ${mns}ד'` : `${mns} דקות`;
+  document.getElementById('qs-item-sub').textContent =
+    `${c.grams * c.plates}g חומר • ${timeTxt} × ${c.plates} פלטות • ${c.totalUnits} יחידות`;
+
+  document.getElementById('qs-qty').textContent    = c.totalUnits;
+  document.getElementById('qs-unit-price').textContent = fmt(c.perUnit);
+  document.getElementById('qs-line-total').textContent  = fmt(c.perUnit * c.totalUnits);
+
+  // Addons block
+  const urgencyLabel = c.urgencyRate === 0.5 ? 'דחוף' : c.urgencyRate === 0.25 ? 'אקספרס' : 'רגיל';
+  const urgencyBadge = c.urgencyRate > 0
+    ? `<span class="qs-badge urgent">🚀 ${urgencyLabel}</span>`
+    : `<span class="qs-badge standard">✅ רגיל</span>`;
+  const shipLabel = c.shippingCost === 0 ? 'איסוף עצמי' : c.shippingCost === 30 ? 'משלוח רגיל' : 'משלוח מהיר';
+
+  document.getElementById('qs-addons-block').innerHTML = `
+    <div class="qs-addon-row">
+      <span class="qs-addon-label"><span class="qs-addon-icon">⚡</span> עדיפות טיפול</span>
+      <span class="qs-addon-value">${urgencyBadge}</span>
+    </div>
+    <div class="qs-addon-row">
+      <span class="qs-addon-label"><span class="qs-addon-icon">📦</span> ${shipLabel}</span>
+      <span class="qs-addon-value ${c.shippingCost > 0 ? 'highlight' : ''}">${c.shippingCost > 0 ? fmt(c.shippingCost) : 'ללא עלות'}</span>
+    </div>
+    <div class="qs-addon-row">
+      <span class="qs-addon-label"><span class="qs-addon-icon">🔁</span> כמות יחידות</span>
+      <span class="qs-addon-value">${c.totalUnits} יח' (${c.plates} פלטות × ${c.perPlate} יח')</span>
+    </div>`;
+
+  document.getElementById('qst-base').textContent = fmt(c.baseCost + c.profit);
+  const urgRow = document.getElementById('qst-urgent-row');
+  const shipRow = document.getElementById('qst-ship-row');
+  if (c.urgencyAdd > 0) { urgRow.style.display='flex'; document.getElementById('qst-urgent').textContent = fmt(c.urgencyAdd); }
+  else { urgRow.style.display='none'; }
+  if (c.shippingCost > 0) { shipRow.style.display='flex'; document.getElementById('qst-ship').textContent = fmt(c.shippingCost); }
+  else { shipRow.style.display='none'; }
+  document.getElementById('qst-final').textContent = fmt(c.clientTotal);
+
+  // Delivery estimate
+  const deliveryDays = c.urgencyRate === 0.5 ? '24 שעות' : c.urgencyRate === 0.25 ? '2-3 ימי עסקים' : '5-7 ימי עסקים';
+  document.getElementById('qs-delivery').textContent = deliveryDays;
+
+  document.getElementById('quote-screen').classList.add('open');
+  window.scrollTo(0,0);
+}
+
+function closeQuote() {
+  document.getElementById('quote-screen').classList.remove('open');
+}
+
+function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const c = lastCalc;
+  const clientName = document.getElementById('inp-client-name').value || 'לקוח יקר';
+  const itemDesc   = document.getElementById('inp-item-desc').value || 'הדפסת תלת מימד';
+  const now        = new Date();
+
+  // Background
+  doc.setFillColor(13,13,13);
+  doc.rect(0,0,210,297,'F');
+
+  // Header bar
+  doc.setFillColor(255,107,43);
+  doc.rect(0,0,210,18,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica','bold');
+  doc.text('Print3D Studio - Quote', 105, 12, { align:'center' });
+
+  // Quote number + date
+  doc.setFontSize(9);
+  doc.setTextColor(180,180,180);
+  doc.setFont('helvetica','normal');
+  doc.text('Date: ' + now.toLocaleDateString('en-GB'), 15, 28);
+  doc.text('Quote #Q' + Date.now().toString().slice(-6), 195, 28, { align:'right' });
+
+  // Client
+  doc.setFillColor(30,30,30);
+  doc.roundedRect(14,33,182,20,3,3,'F');
+  doc.setTextColor(150,150,150);
+  doc.setFontSize(8);
+  doc.text('CLIENT', 20, 41);
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica','bold');
+  doc.text(clientName, 20, 50);
+
+  // Item title
+  doc.setTextColor(255,107,43);
+  doc.setFontSize(11);
+  doc.text(itemDesc, 15, 66);
+  doc.setTextColor(150,150,150);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  const hrs = Math.floor(c.totalHours), mns = Math.round((c.totalHours - hrs)*60);
+  doc.text(`Material: ${c.grams * c.plates}g  |  Time: ${hrs}h ${mns}m  |  Units: ${c.totalUnits}  |  Plates: ${c.plates}`, 15, 73);
+
+  // Table header
+  doc.setFillColor(40,40,40);
+  doc.rect(14,78,182,9,'F');
+  doc.setTextColor(150,150,150);
+  doc.setFontSize(8);
+  ['Item','Qty','Unit Price','Total'].forEach((h,i) => {
+    const x = [18,110,140,175][i];
+    doc.text(h, x, 84);
+  });
+
+  // Table row
+  doc.setFillColor(22,22,22);
+  doc.rect(14,87,182,14,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(9);
+  doc.text(itemDesc, 18, 96);
+  doc.text(String(c.totalUnits), 112, 96);
+  doc.text(fmt(c.perUnit), 142, 96);
+  doc.text(fmt(c.clientTotal - c.shippingCost - c.urgencyAdd), 177, 96);
+
+  // Breakdown
+  let y = 112;
+  const rows = [
+    ['Material cost', fmt(c.matCost)],
+    ['Machine time', fmt(c.timeCost)],
+    ['Fixed costs', fmt(c.fixed)],
+    ['Profit margin (' + c.margin + '%)', fmt(c.profit)],
+  ];
+  if (c.urgencyAdd > 0) rows.push(['Urgency surcharge', fmt(c.urgencyAdd)]);
+  if (c.shippingCost > 0) rows.push(['Shipping', fmt(c.shippingCost)]);
+
+  doc.setFontSize(9);
+  rows.forEach(([label, val]) => {
+    doc.setTextColor(150,150,150);
+    doc.text(label, 18, y);
+    doc.setTextColor(220,220,220);
+    doc.text(val, 192, y, { align:'right' });
+    doc.setDrawColor(40,40,40);
+    doc.line(14, y+2, 196, y+2);
+    y += 10;
+  });
+
+  // Total box
+  doc.setFillColor(255,107,43);
+  doc.roundedRect(14, y+2, 182, 18, 3, 3, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.text('TOTAL', 20, y+14);
+  doc.setFontSize(14);
+  doc.text(fmt(c.clientTotal), 192, y+14, { align:'right' });
+
+  // Footer
+  doc.setTextColor(80,80,80);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Valid for 7 days. Thank you for your business.', 105, 285, { align:'center' });
+
+  doc.save(`quote-${clientName.replace(/\s/g,'-')}.pdf`);
+}
+
+function resetForm() {
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('inp-grams').value = '';
+  document.getElementById('inp-hours').value = '';
+  document.getElementById('inp-mins').value = '';
+  document.getElementById('val-material').textContent = '—';
+  document.getElementById('val-hours').textContent = '—';
+  document.getElementById('val-minutes').textContent = '—';
+  ['ei-material','ei-hours','ei-minutes'].forEach(id => document.getElementById(id).classList.remove('filled'));
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('ocr-status').className = 'ocr-status';
+  imageBase64 = null;
+}
+</script>
+</body>
+</html>
